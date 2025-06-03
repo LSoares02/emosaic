@@ -4,7 +4,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:app/features/Q&A/helpers/questions.dart';
+import 'package:emosaic/features/Q&A/helpers/questions.dart';
 
 class QuestionsAndAnswers extends StatefulWidget {
   const QuestionsAndAnswers({super.key});
@@ -148,11 +148,13 @@ class _QuestionsAndAnswersState extends State<QuestionsAndAnswers>
                   });
                   _startAutoTransitionTimer(); // Reinicia o timer
                 },
-                child: Text("More",
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onPrimaryContainer,
-                    )),
+                child: Text(
+                  "More",
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
               ),
               const SizedBox(width: 10),
               ElevatedButton(
@@ -160,14 +162,16 @@ class _QuestionsAndAnswersState extends State<QuestionsAndAnswers>
                   // Aqui você pode enviar a resposta pro backend
                   Navigator.pop(context);
                 },
-                child: Text("Finish",
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onPrimaryContainer,
-                    )),
+                child: Text(
+                  "Finish",
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
               ),
             ],
-          )
+          ),
         ],
       ),
     );

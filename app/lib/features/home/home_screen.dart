@@ -1,6 +1,6 @@
 import 'dart:math';
-import 'package:app/features/Q&A/q&a_page.dart';
-import 'package:app/features/info_page/info_page.dart';
+import 'package:emosaic/features/Q&A/q&a_page.dart';
+import 'package:emosaic/features/info_page/info_page.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -58,9 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => const InfoPage(),
-                  ),
+                  MaterialPageRoute(builder: (context) => const InfoPage()),
                 );
               },
             ),
@@ -134,8 +132,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Text(
                   "See past days",
                   style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onPrimaryContainer),
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
                 ),
               ),
             ),

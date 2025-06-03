@@ -1,4 +1,4 @@
-# app
+# emosaic
 
 A new Flutter project.
 
