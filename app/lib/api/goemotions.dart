@@ -2,17 +2,18 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-Future<List<dynamic>?> fetchEmotion(String phrase) async {
+Future<List<dynamic>?> fetchEmotionsForAnswers(
+  List<Map<String, dynamic>> qaBlocks,
+) async {
   final url = Uri.parse('https://charmed-donkey-secure.ngrok-free.app/emotion');
 
   try {
-    debugPrint(phrase);
     final response = await http.post(
       url,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        'text': phrase,
-        'threshold': 0.3, // opcional, só se quiser sobrescrever
+        'entries': qaBlocks, // Enviando os objetos completos
+        'threshold': 0.3,
       }),
     );
 

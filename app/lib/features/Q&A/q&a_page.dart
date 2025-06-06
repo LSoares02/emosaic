@@ -1,11 +1,16 @@
 // lib/features/questions/question_presenter_screen.dart
-// ignore_for_file: file_names
+// ignore_for_file: file_names, deprecated_member_use, use_build_context_synchronously
 
 import 'dart:async';
 import 'dart:math';
+import 'package:emosaic/api/goemotions.dart';
+import 'package:emosaic/features/day_details/day_details.dart'
+    show DayDetailsPage;
+import 'package:emosaic/storage_management/qa_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:emosaic/features/Q&A/helpers/questions.dart';
-import 'package:flutter/services.dart';
+import 'components/question_popup.dart';
+import 'components/answer_input.dart';
 
 class QuestionsAndAnswers extends StatefulWidget {
   const QuestionsAndAnswers({super.key});
@@ -23,13 +28,15 @@ class _QuestionsAndAnswersState extends State<QuestionsAndAnswers>
   Timer? autoTransitionTimer;
   int remainingSeconds = 3;
   bool showPopupOpacity = false;
+  bool showLoading = false;
 
   @override
   void initState() {
     super.initState();
 
+    // Start with an empty question, we'll update it when we get the real one
     qaBlocks.add({
-      "question": _getRandomQuestion(),
+      "question": "Loading...", // Placeholder
       "answer": "",
       "emotions": [],
     });
@@ -38,16 +45,30 @@ class _QuestionsAndAnswersState extends State<QuestionsAndAnswers>
     controller.addListener(_onTextChanged);
     controllers.add(controller);
 
-    // Espera o Hero terminar para liberar a opacidade do conteúdo inicial
+    // Load the initial question
+    _loadInitialQuestion();
+
+    // Start the auto transition timer
+    _startAutoTransitionTimer();
+
+    // Wait for the Hero animation to finish
     Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted && !showAnswerInput) {
+      if (mounted) {
         setState(() {
           showPopupOpacity = true;
         });
       }
     });
+  }
 
-    _startAutoTransitionTimer();
+  // New method to load the initial question
+  Future<void> _loadInitialQuestion() async {
+    final question = await _getRandomQuestion();
+    if (mounted) {
+      setState(() {
+        qaBlocks[0]["question"] = question;
+      });
+    }
   }
 
   @override
@@ -81,18 +102,21 @@ class _QuestionsAndAnswersState extends State<QuestionsAndAnswers>
 
   void _onTextChanged() {
     if (mounted) {
-      setState(() {});
+      setState(() {
+        // Update the answer for the current question
+        for (int i = 0; i < controllers.length; i++) {
+          if (i < qaBlocks.length) {
+            qaBlocks[i]['answer'] = controllers[i].text;
+          }
+        }
+      });
     }
   }
 
   void showShortAnswerWarning(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text("Give me a bit more..."),
-        backgroundColor: Theme.of(context).colorScheme.secondary,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: const Text("Give me a bit more...")));
   }
 
   void safePop(BuildContext context) {
@@ -107,9 +131,36 @@ class _QuestionsAndAnswersState extends State<QuestionsAndAnswers>
     });
   }
 
-  String _getRandomQuestion() {
+  Future<String> _getRandomQuestion() async {
     final random = Random();
-    return questionsPool[random.nextInt(questionsPool.length)];
+
+    // Get recent questions from storage
+    final recentQuestionsFromStorage =
+        await QAStorage.getRecentQuestionsFromLastDays(days: 3);
+
+    // Get questions from current session
+    final currentSessionQuestions = qaBlocks
+        .map((block) => block["question"] as String)
+        .where((q) => q.isNotEmpty && q != "Loading...")
+        .toList();
+
+    // Combine both lists and remove duplicates
+    final allRecentQuestions = {
+      ...recentQuestionsFromStorage,
+      ...currentSessionQuestions,
+    }.toList();
+
+    // Filter out questions that have been asked recently
+    final available = questionsPool
+        .where((q) => !allRecentQuestions.contains(q))
+        .toList();
+
+    if (available.isEmpty) {
+      // If all questions have been used recently, fall back to any question
+      return questionsPool[random.nextInt(questionsPool.length)];
+    } else {
+      return available[random.nextInt(available.length)];
+    }
   }
 
   @override
@@ -155,8 +206,8 @@ class _QuestionsAndAnswersState extends State<QuestionsAndAnswers>
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
                   child: showAnswerInput
-                      ? _buildAnswerInput(context, theme)
-                      : _buildPopupQuestion(context, theme),
+                      ? _buildAnswerInput(context)
+                      : _buildPopupQuestion(context),
                 ),
               ),
             ),
@@ -166,228 +217,87 @@ class _QuestionsAndAnswersState extends State<QuestionsAndAnswers>
     );
   }
 
-  Widget _buildPopupQuestion(BuildContext context, ThemeData theme) {
-    final currentQuestion = qaBlocks.isNotEmpty
-        ? qaBlocks.last["question"] as String
-        : "";
-
-    return Center(
-      key: const ValueKey("questionPopup"),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedScale(
-            duration: const Duration(milliseconds: 300),
-            scale: 1.0,
-            curve: Curves.easeOutBack,
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                currentQuestion,
-                textAlign: TextAlign.left,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  color: theme.colorScheme.onPrimary,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 32),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(3, (index) {
-              return AnimatedOpacity(
-                duration: const Duration(milliseconds: 300),
-                opacity: remainingSeconds > index ? 1.0 : 0.2,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.onPrimary,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-        ],
-      ),
+  Widget _buildPopupQuestion(BuildContext context) {
+    return QuestionPopup(
+      currentQuestion: qaBlocks.isNotEmpty
+          ? qaBlocks.last["question"] as String
+          : "",
+      remainingSeconds: remainingSeconds,
+      showLoading: showLoading,
     );
   }
 
-  Widget _buildAnswerInput(BuildContext context, ThemeData theme) {
-    final isLastAnswerEmpty = controllers.isNotEmpty
-        ? controllers.last.text.trim().isEmpty
-        : true;
+  Widget _buildAnswerInput(BuildContext context) {
+    return AnswerInput(
+      qaBlocks: qaBlocks,
+      controllers: controllers,
+      onTextChanged: _onTextChanged,
+      onAddQuestion: () async {
+        final newQuestion = await _getRandomQuestion();
+        if (!mounted) return;
 
-    final isAnyAnswerEmpty = controllers.any((c) => c.text.trim().isEmpty);
-    final isCurrentAnswerValid = controllers.last.text.trim().length >= 20;
+        setState(() {
+          qaBlocks.last["answer"] = controllers.last.text.trim();
+          qaBlocks.add({"question": newQuestion, "answer": "", "emotions": []});
+          controllers.add(TextEditingController()..addListener(_onTextChanged));
+          showAnswerInput = false;
+        });
+        _startAutoTransitionTimer();
+      },
+      onFinish: () async {
+        setState(() {
+          showLoading = true;
+          showAnswerInput = false;
+        });
 
-    return Padding(
-      key: const ValueKey("answerInput"),
-      padding: const EdgeInsets.all(24),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: IntrinsicHeight(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 100),
-                    Column(
-                      children: [
-                        ...List.generate(qaBlocks.length, (index) {
-                          final block = qaBlocks[index];
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                block["question"],
-                                style: theme.textTheme.headlineSmall?.copyWith(
-                                  color: theme.colorScheme.onPrimary,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              TextField(
-                                inputFormatters: [
-                                  LengthLimitingTextInputFormatter(100),
-                                ],
+        try {
+          // 1. Fetch emotions for answers
+          final emotionsList = await fetchEmotionsForAnswers(qaBlocks);
+          debugPrint(emotionsList.toString());
+          if (emotionsList == null) {
+            throw Exception('Failed to fetch emotions');
+          }
 
-                                controller: controllers[index],
-                                maxLines: 1,
-                                readOnly: index != controllers.length - 1,
-                                decoration: InputDecoration(
-                                  hintText: "Feelings, thoughts...",
-                                  filled: true,
-                                  fillColor: index != controllers.length - 1
-                                      ? theme.colorScheme.primaryContainer
-                                            .withOpacity(0.5)
-                                      : theme.colorScheme.primaryContainer
-                                            .withOpacity(.8),
+          // 2. Update qaBlocks with emotions
+          for (int i = 0; i < qaBlocks.length; i++) {
+            if (i < emotionsList.length) {
+              qaBlocks[i] = emotionsList[i];
+            }
+          }
 
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                            ],
-                          );
-                        }),
-                        if (qaBlocks.length < 3)
-                          Center(
-                            child: IconButton(
-                              icon: const Icon(Icons.add, size: 32),
+          // 3. Save qaBlocks to storage
+          await QAStorage.saveQABlocks(qaBlocks);
 
-                              style: ButtonStyle(
-                                backgroundColor:
-                                    isLastAnswerEmpty || !isCurrentAnswerValid
-                                    ? WidgetStateProperty.all(
-                                        theme.colorScheme.onPrimary.withOpacity(
-                                          0.5,
-                                        ),
-                                      )
-                                    : WidgetStateProperty.all(
-                                        theme.colorScheme.onPrimary,
-                                      ),
-
-                                iconColor: WidgetStateProperty.all(
-                                  theme.colorScheme.onPrimaryContainer,
-                                ),
-                              ),
-                              onPressed:
-                                  !isCurrentAnswerValid || isLastAnswerEmpty
-                                  ? () {
-                                      final currentText = controllers.last.text
-                                          .trim();
-                                      if (currentText.length < 30) {
-                                        showShortAnswerWarning(context);
-                                        return;
-                                      }
-                                    }
-                                  : () {
-                                      final lastController = controllers.last;
-                                      if (lastController.text.trim().isEmpty)
-                                        return;
-
-                                      _startAutoTransitionTimer();
-                                      setState(() {
-                                        qaBlocks.last["answer"] = lastController
-                                            .text
-                                            .trim();
-                                        qaBlocks.add({
-                                          "question": _getRandomQuestion(),
-                                          "answer": "",
-                                          "emotions": [],
-                                        });
-                                        controllers.add(
-                                          TextEditingController()
-                                            ..addListener(_onTextChanged),
-                                        );
-                                        showAnswerInput = false;
-                                      });
-                                    },
-                            ),
-                          ),
-                      ],
-                    ),
-                    const Spacer(),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        SizedBox(
-                          width: 100,
-                          child: ElevatedButton(
-                            onPressed: isAnyAnswerEmpty || !isCurrentAnswerValid
-                                ? () {
-                                    final currentText = controllers.last.text
-                                        .trim();
-                                    if (currentText.length < 30) {
-                                      showShortAnswerWarning(context);
-                                      return;
-                                    }
-                                  }
-                                : () {
-                                    safePop(context);
-                                  },
-                            style: ButtonStyle(
-                              padding: WidgetStateProperty.all(
-                                EdgeInsets.symmetric(vertical: 16),
-                              ),
-                              backgroundColor: WidgetStateProperty.all(
-                                isAnyAnswerEmpty || !isCurrentAnswerValid
-                                    ? theme.colorScheme.onPrimary.withOpacity(
-                                        0.5,
-                                      )
-                                    : theme.colorScheme.onPrimary,
-                              ),
-                            ),
-                            child: Text(
-                              "Finish",
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.onPrimaryContainer,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 24),
-                  ],
-                ),
+          // 4. Navigate back to home screen
+          if (mounted) {
+            // Exemplo para abrir a página
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    DayDetailsPage(date: DateTime.now(), qaBlocks: qaBlocks),
               ),
-            ),
-          );
-        },
-      ),
+            );
+          }
+
+          // Testing errors:
+          // await Future.delayed(const Duration(seconds: 2));
+          // throw Exception('Failed to fetch emotions');
+        } catch (e) {
+          debugPrint('Error in onFinish: $e');
+          if (mounted) {
+            setState(() {
+              showAnswerInput = true;
+              showLoading = false;
+            });
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Server fail')));
+          }
+        }
+      },
+      showShortAnswerWarning: showShortAnswerWarning,
+      startAutoTransitionTimer: _startAutoTransitionTimer,
     );
   }
 }

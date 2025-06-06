@@ -1,8 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from model.goemotions import predict_emotions
+from model.goemotions import predict_emotions, process_qa_pairs
 from pydantic import BaseModel
-from typing import List, Tuple
+from typing import List, Dict, Any
 
 app = FastAPI(title="Emotion Detection API",
              description="API for detecting emotions in text using GoEmotions model",
@@ -21,21 +21,27 @@ class EmotionResponse(BaseModel):
     emotion: str
     score: float
 
-class TextInput(BaseModel):
-    text: str
+class QAPair(BaseModel):
+    question: str
+    answer: str
+    emotions: List[Dict[str, Any]] = []
+
+class EmotionInput(BaseModel):
+    entries: List[QAPair]
     threshold: float = 0.3
 
-@app.post("/emotion", response_model=List[EmotionResponse])
-async def detect_emotion(data: TextInput):
+@app.post("/emotion", response_model=List[QAPair])
+async def detect_emotion(data: EmotionInput):
     """
     Detect emotions in the given text.
     
-    - **text**: The input text to analyze
+    - **entries**: List of Q&A pairs
     - **threshold**: Confidence threshold (0-1) for emotion detection (default: 0.3)
     """
     try:
-        emotions = predict_emotions(data.text, data.threshold)
-        return [{"emotion": e[0], "score": e[1]} for e in emotions]
+        updated_qa_pairs = process_qa_pairs(data.entries, data.threshold)
+        print(updated_qa_pairs)
+        return updated_qa_pairs
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
